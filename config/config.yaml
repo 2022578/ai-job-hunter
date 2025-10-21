@@ -1,0 +1,118 @@
+# GenAI Job Assistant Configuration
+
+# LLM Settings
+llm:
+  provider: "ollama"  # ollama or llamacpp
+  model_name: "llama3"  # Model to use (e.g., llama3, mistral, etc.)
+  temperature: 0.7
+  max_tokens: 2000
+  timeout: 30  # seconds
+
+# Job Search Settings
+job_search:
+  keywords:
+    - "GenAI"
+    - "LLM"
+    - "Autonomous Agents"
+    - "LangChain"
+    - "LangGraph"
+    - "RAG"
+    - "Fine-tuning"
+  min_salary: 3500000  # ₹35L in paise
+  preferred_locations:
+    - "Bangalore"
+    - "Remote"
+  remote_preference: true
+  search_schedule: "0 9 * * *"  # Cron format: 9:00 AM daily
+
+# Scraping Settings
+scraping:
+  naukri:
+    enabled: true
+    rate_limit_delay: 2  # seconds between requests
+    max_retries: 3
+    timeout: 30
+  user_agents:
+    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+
+# Database Settings
+database:
+  type: "sqlite"
+  path: "data/job_assistant.db"
+  backup_enabled: true
+  backup_schedule: "0 0 * * *"  # Daily at midnight
+  backup_retention_days: 30
+
+# Notification Settings
+notifications:
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"  # e.g., smtp.gmail.com, smtp.office365.com
+    smtp_port: 587
+    smtp_username: "[your-email@example.com]"
+    smtp_password: "[your-app-password]"  # Use app-specific password
+    from_address: "[your-email@example.com]"
+    to_address: "[your-email@example.com]"
+  
+  whatsapp:
+    enabled: false
+    twilio_account_sid: "[your-twilio-account-sid]"
+    twilio_auth_token: "[your-twilio-auth-token]"
+    twilio_whatsapp_number: "whatsapp:+14155238886"  # Twilio sandbox number
+    user_whatsapp_number: "whatsapp:+91[your-phone-number]"
+  
+  preferences:
+    daily_digest: true
+    digest_time: "09:00"  # 24-hour format
+    interview_reminders: true
+    status_updates: true
+
+# User Profile (to be filled during setup)
+user:
+  name: "[Your Name]"
+  email: "[your-email@example.com]"
+  experience_years: 0
+  target_salary: 3500000  # ₹35L
+  skills:
+    - "Python"
+    - "LangChain"
+    - "GenAI"
+  desired_tech_stack:
+    - "LangChain"
+    - "LangGraph"
+    - "OpenAI"
+    - "Ollama"
+
+# Match Scoring Weights
+scoring:
+  skills_match_weight: 0.35
+  salary_match_weight: 0.25
+  tech_stack_match_weight: 0.20
+  remote_flexibility_weight: 0.10
+  company_profile_weight: 0.10
+
+# Company Profiling
+company_profiling:
+  cache_duration_days: 30
+  glassdoor_enabled: false  # Requires additional setup
+  news_api_enabled: false  # Requires API key
+
+# Security
+security:
+  encryption_key_env_var: "JOB_ASSISTANT_ENCRYPTION_KEY"
+  credential_storage: "database"  # database or keyring
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file_path: "logs/job_assistant.log"
+  max_file_size_mb: 10
+  backup_count: 5
+
+# UI Settings
+ui:
+  theme: "light"  # light or dark
+  page_title: "GenAI Job Assistant"
+  page_icon: "🤖"
+  layout: "wide"

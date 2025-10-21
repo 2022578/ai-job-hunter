@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # Main application service
+  job-assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: genai-job-assistant
+    ports:
+      - "8501:8501"  # Streamlit UI
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+      - ./data/backups:/app/data/backups
+    environment:
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    depends_on:
+      - ollama
+    networks:
+      - job-assistant-network
+    restart: unless-stopped
+    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+
+  # Background scheduler service
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: genai-job-assistant-scheduler
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+      - ./data/backups:/app/data/backups
+    environment:
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    depends_on:
+      - ollama
+    networks:
+      - job-assistant-network
+    restart: unless-stopped
+    command: python scripts/run_scheduler.py
+
+  # Ollama service for LLM
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-service
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - job-assistant-network
+    restart: unless-stopped
+    # Pull model on startup
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        sleep 5
+        ollama pull llama3
+        wait
+
+volumes:
+  ollama-data:
+    driver: local
+
+networks:
+  job-assistant-network:
+    driver: bridge
