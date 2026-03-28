@@ -7,6 +7,7 @@ import sys
 import streamlit as st
 import yaml
 from pathlib import Path
+from datetime import datetime
 
 # Increase recursion limit significantly to handle complex object graphs
 # This is needed for Streamlit's internal operations and database queries
@@ -17,7 +18,8 @@ from utils.logger import AgentLogger, LoggerConfig, get_logger, handle_error
 # Logger will be initialized in main()
 logger = None
 
-# Load configuration
+# Load configuration with caching
+@st.cache_data(ttl=300)  # Cache for 5 minutes
 def load_config():
     """Load configuration from config.yaml"""
     try:
@@ -26,19 +28,8 @@ def load_config():
             with open(config_path, 'r') as f:
                 return yaml.safe_load(f)
         else:
-            if logger:
-                logger.warning("Config file not found, using defaults")
             return {}
-    except Exception as e:
-        error_info = handle_error(
-            e,
-            category='general',
-            error_type='file_not_found',
-            context={'file': 'config.yaml'},
-            logger_name=__name__
-        )
-        if logger:
-            logger.error(f"Failed to load config: {e}")
+    except Exception:
         return {}
 
 # Page configuration
@@ -61,17 +52,21 @@ def init_session_state():
         st.session_state.config = load_config()
     
     if 'user_id' not in st.session_state:
-        # For now, use a default user ID. In production, this would come from authentication
         st.session_state.user_id = 'default_user'
     
     if 'current_page' not in st.session_state:
         st.session_state.current_page = 'Dashboard'
     
     if 'db_manager' not in st.session_state:
-        # Initialize database manager
         from database.db_manager import DatabaseManager
         db_path = st.session_state.config.get('database', {}).get('path', 'data/job_assistant.db')
         st.session_state.db_manager = DatabaseManager(db_path)
+    
+    # Initialize stats cache
+    if 'sidebar_stats' not in st.session_state:
+        st.session_state.sidebar_stats = None
+    if 'stats_last_update' not in st.session_state:
+        st.session_state.stats_last_update = datetime.now()
 
 # Navigation sidebar
 def render_sidebar():
@@ -100,7 +95,7 @@ def render_sidebar():
         
         st.markdown("---")
         
-        # Quick stats in sidebar
+        # Quick stats in sidebar - cached for performance
         st.subheader("Quick Stats")
         
         # Check if database is initialized
@@ -110,61 +105,72 @@ def render_sidebar():
             st.metric("Interviews", "—")
             return
         
-        try:
-            from database.repositories.job_repository import JobRepository
-            from database.repositories.application_repository import ApplicationRepository
-            
-            job_repo = JobRepository(st.session_state.db_manager)
-            app_repo = ApplicationRepository(st.session_state.db_manager)
-            
-            # Use simpler queries to avoid recursion
-            total_jobs = len(job_repo.find_all())
-            stats = app_repo.get_statistics(st.session_state.user_id)
-            
-            st.metric("Total Jobs", total_jobs)
-            st.metric("Applications", stats.get('total', 0))
-            st.metric("Interviews", stats.get('by_status', {}).get('interview', 0))
-        except RecursionError:
-            # Handle recursion error specifically
-            st.metric("Total Jobs", "Error")
-            st.metric("Applications", "Error")
-            st.metric("Interviews", "Error")
-            st.caption("⚠️ Database query error")
-        except Exception:
-            # Simplified error handling for other errors
-            st.metric("Total Jobs", "—")
-            st.metric("Applications", "—")
-            st.metric("Interviews", "—")
+        # Use cached stats to avoid slow queries on every render
+        if 'sidebar_stats' not in st.session_state or \
+           'stats_last_update' not in st.session_state or \
+           (datetime.now() - st.session_state.stats_last_update).seconds > 30:
+            try:
+                from database.repositories.job_repository import JobRepository
+                from database.repositories.application_repository import ApplicationRepository
+                
+                job_repo = JobRepository(st.session_state.db_manager)
+                app_repo = ApplicationRepository(st.session_state.db_manager)
+                
+                # Cache the stats
+                st.session_state.sidebar_stats = {
+                    'total_jobs': len(job_repo.find_all()),
+                    'app_stats': app_repo.get_statistics(st.session_state.user_id)
+                }
+                st.session_state.stats_last_update = datetime.now()
+            except Exception:
+                st.session_state.sidebar_stats = {
+                    'total_jobs': 0,
+                    'app_stats': {'total': 0, 'by_status': {}}
+                }
+        
+        # Display cached stats
+        stats = st.session_state.get('sidebar_stats', {})
+        st.metric("Total Jobs", stats.get('total_jobs', 0))
+        st.metric("Applications", stats.get('app_stats', {}).get('total', 0))
+        st.metric("Interviews", stats.get('app_stats', {}).get('by_status', {}).get('interview', 0))
 
-# Page routing
+# Page routing with optimized lazy loading
+@st.cache_resource
+def get_page_renderer(page_name):
+    """Cache page renderers to avoid repeated imports"""
+    if page_name == "Dashboard":
+        from ui.pages.dashboard import render_dashboard
+        return render_dashboard
+    elif page_name == "Job Search":
+        from ui.pages.job_search import render_job_search
+        return render_job_search
+    elif page_name == "Applications":
+        from ui.pages.applications import render_applications
+        return render_applications
+    elif page_name == "Resume Optimizer":
+        from ui.pages.resume_optimizer import render_resume_optimizer
+        return render_resume_optimizer
+    elif page_name == "Cover Letter":
+        from ui.pages.cover_letter import render_cover_letter
+        return render_cover_letter
+    elif page_name == "Interview Prep":
+        from ui.pages.interview_prep import render_interview_prep
+        return render_interview_prep
+    elif page_name == "Company Profile":
+        from ui.pages.company_profile import render_company_profile
+        return render_company_profile
+    elif page_name == "Settings":
+        from ui.pages.settings import render_settings
+        return render_settings
+    return None
+
 def route_to_page():
     """Route to the selected page"""
     current_page = st.session_state.current_page
+    renderer = get_page_renderer(current_page)
     
-    if current_page == "Dashboard":
-        from ui.pages.dashboard import render_dashboard
-        render_dashboard()
-    elif current_page == "Job Search":
-        from ui.pages.job_search import render_job_search
-        render_job_search()
-    elif current_page == "Applications":
-        from ui.pages.applications import render_applications
-        render_applications()
-    elif current_page == "Resume Optimizer":
-        from ui.pages.resume_optimizer import render_resume_optimizer
-        render_resume_optimizer()
-    elif current_page == "Cover Letter":
-        from ui.pages.cover_letter import render_cover_letter
-        render_cover_letter()
-    elif current_page == "Interview Prep":
-        from ui.pages.interview_prep import render_interview_prep
-        render_interview_prep()
-    elif current_page == "Company Profile":
-        from ui.pages.company_profile import render_company_profile
-        render_company_profile()
-    elif current_page == "Settings":
-        from ui.pages.settings import render_settings
-        render_settings()
+    if renderer:
+        renderer()
     else:
         st.error(f"Unknown page: {current_page}")
 

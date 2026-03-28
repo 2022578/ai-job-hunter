@@ -13,20 +13,21 @@ from database.repositories.application_repository import ApplicationRepository
 logger = logging.getLogger(__name__)
 
 
-def get_dashboard_data(user_id: str, db_manager) -> Dict[str, Any]:
+@st.cache_data(ttl=60)  # Cache for 1 minute
+def get_dashboard_data(user_id: str, _db_manager) -> Dict[str, Any]:
     """
-    Fetch all data needed for dashboard
+    Fetch all data needed for dashboard (cached for performance)
     
     Args:
         user_id: User ID to fetch data for
-        db_manager: Database manager instance
+        _db_manager: Database manager instance (prefixed with _ to exclude from cache key)
         
     Returns:
         Dictionary containing dashboard data
     """
     try:
-        job_repo = JobRepository(db_manager)
-        app_repo = ApplicationRepository(db_manager)
+        job_repo = JobRepository(_db_manager)
+        app_repo = ApplicationRepository(_db_manager)
         
         # Get all jobs
         all_jobs = job_repo.find_all()
@@ -345,17 +346,24 @@ def render_quick_actions():
 
 def render_dashboard():
     """Main dashboard rendering function"""
-    st.title("📊 Dashboard")
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.title("📊 Dashboard")
+    with col2:
+        if st.button("🔄 Refresh", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    
     st.markdown("Welcome to your GenAI Job Assistant dashboard!")
     st.markdown("---")
     
     try:
-        # Fetch dashboard data
+        # Fetch dashboard data with caching
         user_id = st.session_state.user_id
         db_manager = st.session_state.db_manager
         
-        with st.spinner("Loading dashboard data..."):
-            data = get_dashboard_data(user_id, db_manager)
+        # Show loading only on first load
+        data = get_dashboard_data(user_id, db_manager)
         
         # Render overview metrics
         render_overview_metrics(data)

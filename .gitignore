@@ -82,3 +82,9 @@ htmlcov/
 tmp/
 temp/
 *.tmp
+
+# Test and Debug Files
+test_*.py
+*_test.py
+app_minimal.py
+restart_streamlit.bat
